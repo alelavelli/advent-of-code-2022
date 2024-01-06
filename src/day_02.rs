@@ -1,4 +1,4 @@
-use std::{error::Error, fs::File, io::Read, time::Instant, str::FromStr};
+use std::{error::Error, fs::File, io::Read, str::FromStr, time::Instant};
 
 use log::info;
 use strum_macros::EnumString;
@@ -73,21 +73,17 @@ enum MatchResult {
 impl MatchResult {
     fn get_play_type(&self, other: &PlayType) -> PlayType {
         match &self {
-            MatchResult::Win => {
-                match other {
-                    PlayType::Rock => PlayType::Paper,
-                    PlayType::Paper => PlayType::Scissors,
-                    PlayType::Scissors => PlayType::Rock,
-                }
+            MatchResult::Win => match other {
+                PlayType::Rock => PlayType::Paper,
+                PlayType::Paper => PlayType::Scissors,
+                PlayType::Scissors => PlayType::Rock,
             },
-            MatchResult::Lose => {
-                match other {
-                    PlayType::Rock => PlayType::Scissors,
-                    PlayType::Paper => PlayType::Rock,
-                    PlayType::Scissors => PlayType::Paper,
-                }
+            MatchResult::Lose => match other {
+                PlayType::Rock => PlayType::Scissors,
+                PlayType::Paper => PlayType::Rock,
+                PlayType::Scissors => PlayType::Paper,
             },
-            MatchResult::Draw => other.clone()
+            MatchResult::Draw => other.clone(),
         }
     }
 
@@ -95,7 +91,7 @@ impl MatchResult {
         match &self {
             MatchResult::Win => 6,
             MatchResult::Draw => 3,
-            MatchResult::Lose => 0
+            MatchResult::Lose => 0,
         }
     }
 }
@@ -112,7 +108,7 @@ impl PlayType {
         match self {
             PlayType::Rock => 1,
             PlayType::Paper => 2,
-            PlayType::Scissors => 3
+            PlayType::Scissors => 3,
         }
     }
 }
@@ -147,9 +143,7 @@ impl PartialEq for Play {
     }
 }
 
-impl Eq for Play {
-    
-}
+impl Eq for Play {}
 
 impl PartialOrd for Play {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
