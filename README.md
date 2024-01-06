@@ -1,7 +1,5 @@
-# Advent of code - Repo Template
-Template for Rust implementation of Advent of Code.
-Create a new repository starting from this to write your rusty solutions.
-Enjoy!
+# Advent of code 2022
+My implementations of Advent of Code year 2022.
 
 ## Structure
 
