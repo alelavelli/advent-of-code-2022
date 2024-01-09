@@ -31,8 +31,8 @@ pub fn solve(puzzle_input: &str, part: ProblemPart) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-const LOWER_OFFSET: u8 = 'a' as u8;
-const HIGHER_OFFSET: u8 = 'A' as u8;
+const LOWER_OFFSET: u8 = b'a';
+const HIGHER_OFFSET: u8 = b'A';
 
 fn solve_pt1(puzzle_input: String) -> Result<String, Box<dyn Error>> {
     let mut priority_sum: i32 = 0;
@@ -58,7 +58,7 @@ fn solve_pt2(puzzle_input: String) -> Result<String, Box<dyn Error>> {
         let badge = group
             .iter()
             .map(|&x| x.chars().collect::<HashSet<char>>())
-            .reduce(|a, b| a.intersection(&b).map(|x| *x).collect())
+            .reduce(|a, b| a.intersection(&b).copied().collect())
             .unwrap()
             .into_iter()
             .next()

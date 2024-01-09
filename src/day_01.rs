@@ -36,7 +36,7 @@ fn solve_pt1(puzzle_input: String) -> Result<String, Box<dyn Error>> {
 
     let mut current_calories = 0;
     for line in puzzle_input.lines() {
-        if line.len() == 0 {
+        if line.is_empty() {
             max_calories = max_calories.max(current_calories);
             current_calories = 0;
         } else {

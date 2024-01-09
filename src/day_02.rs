@@ -38,10 +38,10 @@ fn solve_pt1(puzzle_input: String) -> Result<String, Box<dyn Error>> {
         let mut line_split = line.split_whitespace();
         let opponent_play = Play::from_str(line_split.next().unwrap()).unwrap();
         let my_play = Play::from_str(line_split.next().unwrap()).unwrap();
-        if my_play == opponent_play {
-            total_points += 3;
-        } else if my_play > opponent_play {
-            total_points += 6;
+        match my_play.cmp(&opponent_play) {
+            std::cmp::Ordering::Equal => total_points += 3,
+            std::cmp::Ordering::Greater => total_points += 6,
+            _ => {}
         }
         total_points += my_play.get_type_point();
     }
@@ -83,7 +83,7 @@ impl MatchResult {
                 PlayType::Paper => PlayType::Rock,
                 PlayType::Scissors => PlayType::Paper,
             },
-            MatchResult::Draw => other.clone(),
+            MatchResult::Draw => *other,
         }
     }
 

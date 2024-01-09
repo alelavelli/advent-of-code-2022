@@ -74,8 +74,7 @@ fn parse_input(puzzle_input: String) -> (HashMap<i32, VecDeque<char>>, Vec<Move>
                 .iter()
                 .collect::<String>()
                 .trim()
-                .replace("[", "")
-                .replace("]", "")
+                .replace(['[', ']'], "")
                 .chars()
                 .next()
             {
