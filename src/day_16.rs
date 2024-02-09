@@ -1,10 +1,5 @@
 use std::{
-    collections::HashMap,
-    error::Error,
-    fs::File,
-    io::Read,
-    ops::{Deref, DerefMut},
-    time::Instant,
+    collections::HashMap, error::Error, fs::File, io::Read, ops::{Deref, DerefMut}, time::Instant
 };
 
 use log::info;
@@ -22,16 +17,16 @@ pub fn solve(puzzle_input: &str, part: ProblemPart) -> Result<(), Box<dyn Error>
             info!("Start solving part 1");
             let start = Instant::now();
             let result = solve_pt1(puzzle_input)?;
-            let duration = start.elapsed().as_secs();
-            info!("Solved part 1 in {duration} seconds.");
+            let duration = start.elapsed().as_millis();
+            info!("Solved part 1 in {duration} milli seconds.");
             result
         }
         ProblemPart::Two => {
             info!("Start solving part 2");
             let start = Instant::now();
             let result = solve_pt2(puzzle_input)?;
-            let duration = start.elapsed().as_secs();
-            info!("Solved part 2 in {duration} seconds.");
+            let duration = start.elapsed().as_millis();
+            info!("Solved part 2 in {duration} milli seconds.");
             result
         }
     };
@@ -42,7 +37,7 @@ pub fn solve(puzzle_input: &str, part: ProblemPart) -> Result<(), Box<dyn Error>
 #[derive(Debug, Clone)]
 struct Valve {
     name: String,
-    flow_rate: u32,
+    flow_rate: u64,
     destinations: Vec<String>,
     open: bool,
 }
@@ -71,7 +66,7 @@ impl From<&str> for Valve {
                 .unwrap(),
             flow_rate: capture
                 .name("RATE")
-                .map(|x| x.as_str().parse::<u32>().unwrap())
+                .map(|x| x.as_str().parse::<u64>().unwrap())
                 .unwrap(),
             destinations: capture
                 .name("DESTINATIONS")
@@ -82,38 +77,38 @@ impl From<&str> for Valve {
     }
 }
 
-fn parse_input(puzzle_input: String) -> HashMap<String, Valve> {
-    let mut scan: HashMap<String, Valve> = HashMap::new();
+fn parse_input(puzzle_input: String) -> Vec<Valve> {
+    let mut scan: Vec<Valve> = Vec::new();
     for line in puzzle_input.lines() {
         let valve = Valve::from(line);
-        scan.insert(valve.name.clone(), valve);
+        scan.push(valve);
     }
     scan
 }
 
 /// from https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm
 fn build_adjacency_matrix(
-    valves: &HashMap<String, Valve>,
-) -> (Vec<Vec<f32>>, HashMap<String, usize>, HashMap<usize, String>) {
-    let mut adjacency: Vec<Vec<f32>> = vec![vec![f32::INFINITY; valves.len()]; valves.len()];
-    let mut valve_to_id: HashMap<String, usize> = HashMap::new();
-    let mut id_to_valve: HashMap<usize, String> = HashMap::new();
-
-    for (i, valve_name) in valves.keys().enumerate() {
-        valve_to_id.insert(valve_name.clone(), i);
-        id_to_valve.insert(i, valve_name.clone());
+    valves: &Vec<Valve>,
+) -> Vec<Vec<u64>> {
+    let mut adjacency: Vec<Vec<u64>> = vec![vec![u64::MAX / 2; valves.len()]; valves.len()];
+    
+    let mut valve_to_id: HashMap<&String, usize> = HashMap::new();
+    let mut id_to_valve: HashMap<usize, &String> = HashMap::new();
+    for (i, valve) in valves.iter().enumerate() {
+        valve_to_id.insert(&valve.name, i);
+        id_to_valve.insert(i, &valve.name);
     }
-    for valve_name in valves.keys() {
-        let current_valve_id = valve_to_id.get(valve_name).unwrap();
-        adjacency[*current_valve_id][*current_valve_id] = 0.0;
-        for other_valve in valves.get(valve_name).unwrap().destinations.iter() {
-            adjacency[*current_valve_id][*valve_to_id.get(other_valve).unwrap()] = 1.0;
+
+    for (i, valve) in valves.iter().enumerate() {
+        adjacency[i][i] = 0;
+        for other_valve in valve.destinations.iter() {
+            adjacency[i][*valve_to_id.get(other_valve).unwrap()] = 1;
         }
     }
 
-    for k in 0..valves.keys().len() {
-        for i in 0..valves.keys().len() {
-            for j in 0..valves.keys().len() {
+    for k in 0..valves.len() {
+        for i in 0..valves.len() {
+            for j in 0..valves.len() {
                 let ik = adjacency[i][k];
                 let kj = adjacency[k][j];
                 let ij = adjacency[i][j];
@@ -124,121 +119,144 @@ fn build_adjacency_matrix(
             }
         }
     }
-
-    (adjacency, valve_to_id, id_to_valve)
+    adjacency
 }
 
-#[derive(Debug, Clone)]
-struct Track<'a> {
-    // clone of valves because each track modifies the valves
-    valves: HashMap<String, Valve>,
-    current_valve: String,
-    remaining_time: i32,
-    released_pressure: u32,
-    valve_to_id: &'a HashMap<String, usize>,
-    id_to_valve: &'a HashMap<usize, String>,
-    adjacency: &'a Vec<Vec<f32>>,
-    path: Vec<String>,
+
+struct Track {
+    current_idx: usize,
+    track_mask: u64,
+    track_flow: u64,
+    remaining_time: u64
 }
-impl<'a> Track<'a> {
-    fn new(
-        valves: HashMap<String, Valve>,
-        valve_to_id: &'a HashMap<String, usize>,
-        id_to_valve: &'a HashMap<usize, String>,
-        adjacency: &'a Vec<Vec<f32>>,
-    ) -> Track<'a> {
-        Track {
-            valves,
-            current_valve: "AA".to_string(),
-            remaining_time: 30,
-            released_pressure: 0,
-            valve_to_id,
-            id_to_valve,
-            adjacency,
-            path: vec!["AA".to_string()],
+
+fn step(
+    valves: &Vec<Valve>,
+    adjacency: &Vec<Vec<u64>>,
+    track: &Track
+) -> Option<Vec<Track>> {
+    /*
+    for the current idx finds all the destinations, compute the time, release
+    return all the new tracks as track_mask, track_flow and current_idx
+    */
+    let mut new_tracks: Vec<Track> = Vec::new();
+    let potential_valves = valves
+        .iter()
+        .enumerate()
+        .filter(|(i, v)| {
+            // the valve must be closed and with flow rate
+            ((1 << i) & track.track_mask == 0) & (v.flow_rate > 0)
+        })
+        .map(|(i, _)| i);
+    for destination_id in potential_valves {
+        let time = track
+            .remaining_time
+            .checked_sub(adjacency[track.current_idx][destination_id])
+            .and_then(|t| t.checked_sub(1))
+            .unwrap_or(0);
+        if time > 0 {
+            let released_pressure = valves[destination_id].flow_rate * time;
+            new_tracks.push(
+                Track {
+                track_mask: track.track_mask | (1 << destination_id),
+                track_flow: released_pressure + track.track_flow,
+                remaining_time: time,
+                current_idx: destination_id
+            })
         }
     }
-
-    /// consume itself and generate new tracks with next opened valves
-    fn step(self) -> Vec<Track<'a>> {
-        let mut new_tracks: Vec<Track> = Vec::new();
-
-        for destination_id in 0..self.valves.len() {
-            let valve = self.valves.get(self.id_to_valve.get(&destination_id).unwrap()).unwrap();
-            let time = self.remaining_time as f32 - self.adjacency[*self.valve_to_id.get(&self.current_valve).unwrap()][destination_id] - 1.0;
-
-            let released_pressure = valve.flow_rate * time as u32;
-            if !valve.open & (released_pressure > 0) {
-                let mut new_valves = self.valves.clone();
-                let destination_name = self.id_to_valve.get(&destination_id).unwrap();
-                new_valves
-                    .entry(destination_name.clone())
-                    .and_modify(|x| x.open = true);
-
-                let mut new_path = self.path.clone();
-                new_path.push(destination_name.clone());
-
-                new_tracks.push(Track {
-                    valves: new_valves,
-                    current_valve: destination_name.clone(),
-                    remaining_time: time as i32,
-                    released_pressure: self.released_pressure + released_pressure,
-                    valve_to_id: self.valve_to_id,
-                    id_to_valve: self.id_to_valve,
-                    adjacency: self.adjacency,
-                    path: new_path,
-                });
-            }
-        }
-
-        if new_tracks.is_empty() {
-            vec![Track {
-                valves: self.valves,
-                current_valve: self.current_valve,
-                remaining_time: 0,
-                released_pressure: self.released_pressure,
-                valve_to_id: self.valve_to_id,
-                id_to_valve: self.id_to_valve,
-                adjacency: self.adjacency,
-                path: self.path,
-            }]
-        } else {
-            new_tracks
-        }
+    if new_tracks.is_empty() {
+        None
+    } else {
+        Some(new_tracks)
     }
 }
 
 fn solve_pt1(puzzle_input: String) -> Result<String, Box<dyn Error>> {
     let valves = parse_input(puzzle_input);
+    let adjacency = build_adjacency_matrix(&valves);
+
+    let current_idx = valves.iter().position(|v| v.name == "AA".to_string()).unwrap();
+    // 0 means the valve is closed and 1 means that it is open
+    let track_mask: u64 = 0;
+    let mut active_tracks: Vec<Track> = vec![
+        Track {
+            current_idx,
+            track_flow: 0,
+            track_mask,
+            remaining_time: 30
+        }
+    ];
+    let mut best_flow = 0;
+
+    while let Some(track) = active_tracks.pop() {
+        if let Some(next_tracks) = step(&valves, &adjacency, &track) {
+            for next_track in next_tracks {
+                if next_track.remaining_time > 0 {
+                    active_tracks.push(next_track);
+                } else {
+                    best_flow = best_flow.max(next_track.track_flow);
+                }
+            }
+        } else {
+            best_flow = best_flow.max(track.track_flow);
+        }
+    }
+
+    Ok(best_flow.to_string())
+}
+
+fn solve_pt2(_puzzle_input: String) -> Result<String, Box<dyn Error>> {
+    /*
+    let valves = parse_input(puzzle_input);
     let (adjacency, valve_to_id, id_to_valve) = build_adjacency_matrix(&valves);
 
-    let mut active_tracks: Vec<Track> = vec![Track::new(
+    let mut elf_active_tracks: Vec<Track> = vec![Track::new(
+        26,
+        valves.clone(),
+        &valve_to_id,
+        &id_to_valve,
+        &adjacency,
+    )];
+    let mut elf_closed_tracks = Vec::new();
+
+    while let Some(track) = elf_active_tracks.pop() {
+        elf_closed_tracks.push(track.clone());
+        for next_track in track.step() {
+            if next_track.remaining_time > 0 {
+                elf_active_tracks.push(next_track);
+            } else {
+                elf_closed_tracks.push(next_track);
+            }
+        }
+    }
+
+    let mut elephant_active_tracks =  vec![Track::new(
+        26,
         valves,
         &valve_to_id,
         &id_to_valve,
         &adjacency,
     )];
-    let mut best_track_opt: Option<Track> = None;
 
-    while let Some(track) = active_tracks.pop() {
+    let mut best_mix_flow = 0;
+    info!("start processing elephant!");
+    while let Some(track) = elephant_active_tracks.pop() {
         for next_track in track.step() {
-            if next_track.remaining_time > 0 {
-                active_tracks.push(next_track);
-            } else {
-                if let Some(ref best_track) = best_track_opt {
-                    if best_track.released_pressure < next_track.released_pressure {
-                        best_track_opt = Some(next_track);
-                    }
-                } else {
-                    best_track_opt = Some(next_track);
+            best_mix_flow = best_mix_flow.max(elf_closed_tracks.iter().fold(0, |acc, x| { if x.overlaps(&next_track) { acc } else { acc.max(x.released_pressure + next_track.released_pressure) } }));
+            /*for elf_track in elf_closed_tracks.iter() {
+                if ! elf_track.overlaps(&next_track) {
+                    best_mix_flow = best_mix_flow.max(elf_track.released_pressure + next_track.released_pressure);
                 }
+            }*/
+            if next_track.remaining_time > 0 {
+                elephant_active_tracks.push(next_track);
             }
         }
     }
-    Ok(best_track_opt.unwrap().released_pressure.to_string())
-}
 
-fn solve_pt2(_puzzle_input: String) -> Result<String, Box<dyn Error>> {
+    Ok(best_mix_flow.to_string())
+     */
     todo!()
 }
 
@@ -265,12 +283,12 @@ mod test {
 
     #[test]
     fn test_pt2() -> Result<(), Box<dyn Error>> {
-        let mut file = File::open("inputs/")?;
+        let mut file = File::open("inputs/day_16_example.txt")?;
         let mut puzzle_input = String::new();
         file.read_to_string(&mut puzzle_input)?;
-        let _result = solve_pt2(puzzle_input)?;
+        let result = solve_pt2(puzzle_input)?;
 
-        // Add your assertions
+        assert_eq!("1707".to_string(), result);
 
         Ok(())
     }
