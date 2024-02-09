@@ -1,5 +1,10 @@
 use std::{
-    collections::HashMap, error::Error, fs::File, io::Read, ops::{Deref, DerefMut}, time::Instant
+    collections::HashMap,
+    error::Error,
+    fs::File,
+    io::Read,
+    ops::{Deref, DerefMut},
+    time::Instant,
 };
 
 use log::info;
@@ -87,11 +92,9 @@ fn parse_input(puzzle_input: String) -> Vec<Valve> {
 }
 
 /// from https://en.wikipedia.org/wiki/Floyd%E2%80%93Warshall_algorithm
-fn build_adjacency_matrix(
-    valves: &Vec<Valve>,
-) -> Vec<Vec<u64>> {
+fn build_adjacency_matrix(valves: &Vec<Valve>) -> Vec<Vec<u64>> {
     let mut adjacency: Vec<Vec<u64>> = vec![vec![u64::MAX / 2; valves.len()]; valves.len()];
-    
+
     let mut valve_to_id: HashMap<&String, usize> = HashMap::new();
     let mut id_to_valve: HashMap<usize, &String> = HashMap::new();
     for (i, valve) in valves.iter().enumerate() {
@@ -122,19 +125,15 @@ fn build_adjacency_matrix(
     adjacency
 }
 
-
+#[derive(Debug, Clone)]
 struct Track {
     current_idx: usize,
     track_mask: u64,
     track_flow: u64,
-    remaining_time: u64
+    remaining_time: u64,
 }
 
-fn step(
-    valves: &Vec<Valve>,
-    adjacency: &Vec<Vec<u64>>,
-    track: &Track
-) -> Option<Vec<Track>> {
+fn step(valves: &[Valve], adjacency: &[Vec<u64>], track: &Track) -> Option<Vec<Track>> {
     /*
     for the current idx finds all the destinations, compute the time, release
     return all the new tracks as track_mask, track_flow and current_idx
@@ -156,12 +155,11 @@ fn step(
             .unwrap_or(0);
         if time > 0 {
             let released_pressure = valves[destination_id].flow_rate * time;
-            new_tracks.push(
-                Track {
+            new_tracks.push(Track {
                 track_mask: track.track_mask | (1 << destination_id),
                 track_flow: released_pressure + track.track_flow,
                 remaining_time: time,
-                current_idx: destination_id
+                current_idx: destination_id,
             })
         }
     }
@@ -176,17 +174,15 @@ fn solve_pt1(puzzle_input: String) -> Result<String, Box<dyn Error>> {
     let valves = parse_input(puzzle_input);
     let adjacency = build_adjacency_matrix(&valves);
 
-    let current_idx = valves.iter().position(|v| v.name == "AA".to_string()).unwrap();
+    let current_idx = valves.iter().position(|v| v.name == *"AA").unwrap();
     // 0 means the valve is closed and 1 means that it is open
     let track_mask: u64 = 0;
-    let mut active_tracks: Vec<Track> = vec![
-        Track {
-            current_idx,
-            track_flow: 0,
-            track_mask,
-            remaining_time: 30
-        }
-    ];
+    let mut active_tracks: Vec<Track> = vec![Track {
+        current_idx,
+        track_flow: 0,
+        track_mask,
+        remaining_time: 30,
+    }];
     let mut best_flow = 0;
 
     while let Some(track) = active_tracks.pop() {
@@ -206,58 +202,48 @@ fn solve_pt1(puzzle_input: String) -> Result<String, Box<dyn Error>> {
     Ok(best_flow.to_string())
 }
 
-fn solve_pt2(_puzzle_input: String) -> Result<String, Box<dyn Error>> {
-    /*
+fn solve_pt2(puzzle_input: String) -> Result<String, Box<dyn Error>> {
     let valves = parse_input(puzzle_input);
-    let (adjacency, valve_to_id, id_to_valve) = build_adjacency_matrix(&valves);
+    let adjacency = build_adjacency_matrix(&valves);
 
-    let mut elf_active_tracks: Vec<Track> = vec![Track::new(
-        26,
-        valves.clone(),
-        &valve_to_id,
-        &id_to_valve,
-        &adjacency,
-    )];
-    let mut elf_closed_tracks = Vec::new();
+    let current_idx = valves.iter().position(|v| v.name == *"AA").unwrap();
+    // 0 means the valve is closed and 1 means that it is open
+    let track_mask: u64 = 0;
+    let mut active_tracks: Vec<Track> = vec![Track {
+        current_idx,
+        track_flow: 0,
+        track_mask,
+        remaining_time: 26,
+    }];
+    let mut closed_tracks: Vec<Track> = Vec::new();
 
-    while let Some(track) = elf_active_tracks.pop() {
-        elf_closed_tracks.push(track.clone());
-        for next_track in track.step() {
-            if next_track.remaining_time > 0 {
-                elf_active_tracks.push(next_track);
-            } else {
-                elf_closed_tracks.push(next_track);
-            }
-        }
-    }
-
-    let mut elephant_active_tracks =  vec![Track::new(
-        26,
-        valves,
-        &valve_to_id,
-        &id_to_valve,
-        &adjacency,
-    )];
-
-    let mut best_mix_flow = 0;
-    info!("start processing elephant!");
-    while let Some(track) = elephant_active_tracks.pop() {
-        for next_track in track.step() {
-            best_mix_flow = best_mix_flow.max(elf_closed_tracks.iter().fold(0, |acc, x| { if x.overlaps(&next_track) { acc } else { acc.max(x.released_pressure + next_track.released_pressure) } }));
-            /*for elf_track in elf_closed_tracks.iter() {
-                if ! elf_track.overlaps(&next_track) {
-                    best_mix_flow = best_mix_flow.max(elf_track.released_pressure + next_track.released_pressure);
+    while let Some(track) = active_tracks.pop() {
+        if let Some(next_tracks) = step(&valves, &adjacency, &track) {
+            for next_track in next_tracks {
+                if next_track.remaining_time > 0 {
+                    // we put it because we need to chceck all the partial tracks
+                    closed_tracks.push(next_track.clone());
+                    active_tracks.push(next_track);
+                } else {
+                    closed_tracks.push(next_track);
                 }
-            }*/
-            if next_track.remaining_time > 0 {
-                elephant_active_tracks.push(next_track);
+            }
+        } else {
+            closed_tracks.push(track);
+        }
+    }
+
+    // Now we find the complementar tracks with highest sum
+    let mut best_flow = 0;
+    for track in closed_tracks.iter() {
+        for other in closed_tracks.iter() {
+            if track.track_mask & other.track_mask == 0 {
+                best_flow = best_flow.max(track.track_flow + other.track_flow);
             }
         }
     }
 
-    Ok(best_mix_flow.to_string())
-     */
-    todo!()
+    Ok(best_flow.to_string())
 }
 
 #[cfg(test)]
